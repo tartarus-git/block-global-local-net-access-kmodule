@@ -1,10 +1,23 @@
+#include <linux/types.h>
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/netfilter.h>
 #include <linux/netfilter_ipv6.h>
 
-// TODO: finish this thought.
-//static struct in6_addr
+static struct simple_in6_addr_list {
+	struct in6_addr addr;
+	struct list_head list;
+};
+
+LIST_HEAD(iface_global_ipv6_cache);
+
+static bool ipv6_has_same_prefix(const in6_addr *a_addr, const in6_addr *b_addr) {
+	for (__u8 i = 0; i < 8; i++) {
+		if (a_addr->in6_u.u6_addr8[i] != b_addr->in6_u.u6_addr8[i]) { return false; }
+	}
+	return true;
+}
 
 static unsigned int netfilter_ipv6_hook_callback(unsigned int hooknum,
 					    struct sk_buff *skb,
@@ -12,6 +25,14 @@ static unsigned int netfilter_ipv6_hook_callback(unsigned int hooknum,
 {
 	if (state->out == outiface) {
 		const struct ipv6hdr *ipv6_header = ipv6_hdr(skb);
+
+		struct simple_in6_addr_list *ipv6_iter_ptr;
+		list_for_each_entry(ipv6_iter_ptr, &iface_global_ipv6_cache, list)
+		{
+			if (ipv6_has_same_prefix(&ipv6_header.saddr, &ipv6_iter_ptr.addr)) {
+				return NF_DROP;
+			}
+		}
 	}
 
 	return NF_ACCEPT;
